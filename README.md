@@ -167,6 +167,27 @@ Either `field.value` or `field.value.pattern` must be defined to apply filter.
 
 Only, `string`, `numeric` and `boolean` types are considered for matching purposes, other types are ignored.
 
+### `FilterByHeaderValue`
+
+This transformation allows filtering records based on a specific header value and a matching expected value or regex pattern.
+
+Here is an example of this transformation configuration:
+
+```properties
+transforms=Filter
+transforms.Filter.type=io.aiven.kafka.connect.transforms.FilterByHeaderValue
+transforms.Filter.header.name=<header_name>
+transforms.Filter.header.value=<header_value>
+transforms.Filter.header.value.pattern=<regex_pattern>
+transforms.Filter.header.value.matches=<true|false>
+```
+
+If `header.name` is empty, the message `key` header is considered for filtering.
+
+Either `header.value` or `header.value.pattern` must be defined to apply filter.
+
+Only `string` types are considered for matching purposes, other types are ignored.
+
 ### `ExtractTopicFromSchemaName`
 
 This transformation checks the  schema name and if it exists uses it as the topic name.
