@@ -112,6 +112,34 @@ class FilterByFieldValueTest {
     }
 
     @Test
+    void shouldFilterOutNestedValueRecordsEquals() {
+        final FilterByFieldValue<SourceRecord> filter = new FilterByFieldValue.Value<>();
+        filter.configure(Map.of(
+            "field.name", "after.pk",
+            "field.value", "mypk",
+            "field.value.matches", "true"
+        ));
+
+        assertThat(filter.apply(
+            prepareStructRecord(
+                struct -> {
+                },
+                struct -> ((Struct)struct.get("after")).put("pk", "notthis")
+            )))
+            .as("Record with after.pk not equal to 'mypk' should be filtered out")
+            .isNull();
+
+        final SourceRecord record = prepareStructRecord(
+            struct -> {
+            },
+            struct -> ((Struct)struct.get("after")).put("pk", "mypk")
+        );
+        assertThat(filter.apply(record))
+            .as("Record with after.pk equal to 'mypk' should not be filtered out")
+            .isEqualTo(record);
+    }
+
+    @Test
     void shouldFilterOutKeyRecordsNotEqualsToId() {
         final FilterByFieldValue<SourceRecord> filter = new FilterByFieldValue.Key<>();
         filter.configure(Map.of(

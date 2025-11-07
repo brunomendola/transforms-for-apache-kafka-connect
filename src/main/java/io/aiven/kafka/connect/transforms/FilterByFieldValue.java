@@ -45,8 +45,9 @@ public abstract class FilterByFieldValue<R extends ConnectRecord<R>> implements 
                 ConfigDef.Type.STRING,
                 null,
                 ConfigDef.Importance.HIGH,
-                "The field name to filter by."
-                    + "Schema-based records (Avro), schemaless (e.g. JSON), and raw values are supported."
+                "The field name to filter by. "
+                    + "Schema-based records (Avro), schemaless (e.g. JSON), and raw values are supported. "
+                    + "Nested fields can be specified using dot notation (e.g., 'user.address.city'). "
                     + "If empty, the whole key/value record will be filtered.")
             .define("field.value",
                 ConfigDef.Type.STRING,
@@ -121,14 +122,33 @@ public abstract class FilterByFieldValue<R extends ConnectRecord<R>> implements 
     }
 
     private Optional<SchemaAndValue> getStructFieldValue(final Struct struct, final String fieldName) {
-        final Schema schema = struct.schema();
-        final Field field = schema.field(fieldName);
-        final Object fieldValue = struct.get(field);
-        if (fieldValue == null) {
-            return Optional.empty();
-        } else {
-            return Optional.of(new SchemaAndValue(field.schema(), struct.get(field)));
+        String[] fieldPath = fieldName.split("\\.");
+        Struct currentStruct = struct;
+        Schema currentSchema = struct.schema();
+
+        for (int i = 0; i < fieldPath.length; i++) {
+            Field field = currentSchema.field(fieldPath[i]);
+            if (field == null) {
+                return Optional.empty();
+            }
+
+            Object fieldValue = currentStruct.get(field);
+            if (fieldValue == null) {
+                return Optional.empty();
+            }
+
+            if (i < fieldPath.length - 1) {
+                if (!(fieldValue instanceof Struct)) {
+                    return Optional.empty();
+                }
+                currentStruct = (Struct) fieldValue;
+                currentSchema = currentStruct.schema();
+            } else {
+                return Optional.of(new SchemaAndValue(field.schema(), fieldValue));
+            }
         }
+
+        return Optional.empty();
     }
 
     @SuppressWarnings("unchecked")
@@ -138,9 +158,27 @@ public abstract class FilterByFieldValue<R extends ConnectRecord<R>> implements 
             return filterCondition.test(schemaAndValue) ? record : null;
         } else {
             final Map<String, Object> map = (Map<String, Object>) operatingValue(record);
-            final SchemaAndValue schemaAndValue = getSchemalessFieldValue(map.get(fieldName)).orElse(null);
+            final SchemaAndValue schemaAndValue = getNestedSchemalessFieldValue(map, fieldName).orElse(null);
             return filterCondition.test(schemaAndValue) ? record : null;
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Optional<SchemaAndValue> getNestedSchemalessFieldValue(final Map<String, Object> map, final String fieldName) {
+        String[] fieldPath = fieldName.split("\\.");
+        Object currentValue = map;
+
+        for (String fieldPart : fieldPath) {
+            if (!(currentValue instanceof Map)) {
+               return Optional.empty();
+            }
+            currentValue = ((Map<String, Object>) currentValue).get(fieldPart);
+            if (currentValue == null) {
+               return Optional.empty();
+            }
+        }
+
+        return getSchemalessFieldValue(currentValue);
     }
 
     private Optional<SchemaAndValue> getSchemalessFieldValue(final Object fieldValue) {
